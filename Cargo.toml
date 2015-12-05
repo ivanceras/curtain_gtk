@@ -1,0 +1,8 @@
+[package]
+name = "curtain_gtk"
+version = "0.1.0"
+authors = ["Jovansonlee Cesar <ivanceras@gmail.com>"]
+
+[dependencies]
+gtk = "0.0.6"
+glib = "0.0.7"
