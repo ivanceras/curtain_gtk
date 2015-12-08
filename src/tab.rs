@@ -4,7 +4,7 @@ MenuToolButton, Frame, Button, ButtonBox, Entry,
 Label, IconSize, ReliefStyle, CheckButton, 
 RadioButton,Toolbar,Image,ToolButton,
 TreeView, TreeViewColumn,ListStore,CellRendererText,CellRendererToggle,
-NoteBook, ScrolledWindow,Stack,StackSwitcher
+NoteBook, ScrolledWindow,Stack,StackSwitcher, Grid,
 };
 use gtk::traits::{WidgetTrait, WindowTrait, BoxTrait, 
 ToolItemTrait,DialogTrait,
@@ -28,6 +28,9 @@ use gtk::ButtonsType;
 
 use gtk;
 
+static VIEW_DETAIL: &'static str = "View detail";
+static LIST_VIEW: &'static str = "List view";
+
 #[derive(Clone)]
 pub struct DataToolbar{
 	
@@ -35,9 +38,11 @@ pub struct DataToolbar{
 	pub save: ToolButton,
 	pub refresh: ToolButton,
 	pub detail: ToolButton,
+	pub detail_icon: Image,
 	pub delete: ToolButton,
 	pub undo: ToolButton,
 	pub redo: ToolButton,
+	pub find: ToolButton,
 
 }
 
@@ -61,7 +66,7 @@ impl DataToolbar{
 		refresh_button.set_is_important(true);
 
 		let detail_icon = Image::new_from_icon_name("view-fullscreen", IconSize::SmallToolbar as i32).unwrap();
-		let detail_button = ToolButton::new::<Image>(Some(&detail_icon), Some("Detailed View")).unwrap();
+		let detail_button = ToolButton::new::<Image>(Some(&detail_icon), Some(VIEW_DETAIL)).unwrap();
 		detail_button.set_is_important(true);
 		
 		// delete button
@@ -80,14 +85,21 @@ impl DataToolbar{
 		let redo_button = ToolButton::new::<Image>(Some(&redo_icon), Some("Redo")).unwrap();
 		redo_button.set_is_important(true);
 
+		//find
+		let find_icon = Image::new_from_icon_name("edit-find", IconSize::SmallToolbar as i32).unwrap();
+		let find_button = ToolButton::new::<Image>(Some(&find_icon), Some("Search")).unwrap();
+		find_button.set_is_important(true);
+		
 		DataToolbar{
 			new: new_button,
 			save: save_button,
 			refresh: refresh_button,
 			detail: detail_button,
+			detail_icon: detail_icon,
 			delete: delete_button,
 			undo: undo_button,
 			redo: redo_button,
+			find: find_button,
 		}
 	}
 
@@ -96,10 +108,11 @@ impl DataToolbar{
 		toolbar.add(&self.new);
 		toolbar.add(&self.save);
 		toolbar.add(&self.refresh);
-		toolbar.add(&self.detail);
 		toolbar.add(&self.delete);
 		toolbar.add(&self.undo);
 		toolbar.add(&self.redo);
+		toolbar.add(&self.find);
+		toolbar.add(&self.detail);
 		toolbar
 	}
 
@@ -143,24 +156,27 @@ impl CurtainTab{
 	pub fn build_widget(&self)->gtk::Box{
 		let vbox = gtk::Box::new(Vertical,0).unwrap();
 		vbox.add(&self.toolbar.build_widget());
-		let stack = Stack::new().unwrap();
-		let stack_switcher = StackSwitcher::new().unwrap();
-		stack.add_titled(&self.list_content, "list", "List View");
-		stack.add_titled(&self.detail_content, "detail", "Detailed View");
-		//vbox.add(&stack_switcher);
-		vbox.add(&stack);
-		stack_switcher.set_stack(stack);
+		vbox.add(&self.list_content);
+		vbox.add(&self.detail_content);
+		self.detail_content.set_no_show_all(true);
 		self.init_detail_toolbar();
 		vbox
 	}
 
 	fn set_list_view(&self, list_view: bool){
+		self.detail_content.set_no_show_all(false);
+		self.detail_content.show_all();
 		self.list_content.set_visible(list_view);
 		self.detail_content.set_visible(!list_view);
 		let (icon_name, label) = match list_view{
-			true => ("view-fullscreen", "View Detail"),
-			false => ("view-restore", "List View")
+			true => ("view-fullscreen", VIEW_DETAIL),
+			false => ("view-restore", LIST_VIEW)
 		};
+		println!("icon name: {:#?}", self.toolbar.detail.get_icon_name());
+		self.toolbar.detail.set_icon_name(icon_name);//FIXME doesn't change the icon
+		self.toolbar.detail_icon.set_from_icon_name(icon_name, IconSize::SmallToolbar as i32);
+		self.toolbar.detail.set_label(label);
+		println!("now icon name: {:#?}", self.toolbar.detail.get_icon_name());
 	}
 	
 	fn toggle_list_view(&self){
@@ -229,40 +245,77 @@ impl CurtainTab{
 			bvalue.init(Type::Bool);
 			unsafe{bvalue.set_boolean(true)};
 			store.set_value(&iter, 2, &bvalue);
-			if let Some(path) = model.get_path(&iter){
+			/*if let Some(path) = model.get_path(&iter){
 				selection.select_path(&path);
 			}
+			*/
 		}
-		tree.set_size_request(200, 600);
+		//tree.set_size_request(200, 600);
 		let scroll = ScrolledWindow::new(None, None).unwrap();
 		scroll.add(&tree);
+		//scroll.set_min_content_height(600);
 		let vbox = gtk::Box::new(Vertical, 0).unwrap();
+		//vbox.pack_start(&scroll, true, true, 10);
+		let paging = Self::create_paging_buttons_for_list();
+		//vbox.pack_start(&paging, true, true, 10);
 		vbox.add(&scroll);
-		let paging = Self::create_paging_buttons();
-		vbox.pack_end(&paging, false, false, 0);
+		vbox.pack_start(&paging, false, false, 10);
 		vbox	
 	}
 	
 	fn create_detail_content()->gtk::Box{
 		let vbox = gtk::Box::new(Vertical,0).unwrap();
-		let btn  = Button::new_with_label("Detail view").unwrap();
-		vbox.pack_start(&btn,true,true,0);
+		let hbox = gtk::Box::new(Horizontal,0).unwrap();
+		let close_btn  = Button::new().unwrap();
+		let close_image = Image::new_from_icon_name("window-close",IconSize::Menu as i32).unwrap();
+		close_btn.add(&close_image);
+
+		vbox.add(&hbox);
+		hbox.pack_end(&close_btn,false,false,0);
+		let nav_records = Self::create_record_nav_buttons_for_detail();
+		hbox.pack_end(&nav_records, false, false, 5);
+		let grid = Grid::new().unwrap();
+		
+
+
+		for i in 0..5{
+				let label = Label::new(&format!("column {}",i+1)).unwrap();
+				let entry = Entry::new().unwrap();
+				entry.set_text(&format!("value {}", (i+1)*100));
+				grid.attach(&label, 0, i*2, 1, 2);
+				grid.attach(&entry, 2, i*2, 2, 1);
+		}
+		vbox.pack_start(&grid, true, true, 10);
 		vbox
 	}
 	
-	//paging
-	fn create_paging_buttons()->Toolbar{
-		let toolbar = Toolbar::new().unwrap();
+	fn create_record_nav_buttons_for_detail()->gtk::Box{
+		let paging = gtk::Box::new(Horizontal, 0).unwrap();
 		let prev_icon = Image::new_from_icon_name("go-previous", IconSize::SmallToolbar as i32).unwrap();
-		let prev_button = ToolButton::new::<Image>(Some(&prev_icon), None).unwrap();
-		//prev_button.set_is_important(true);
-		toolbar.add(&prev_button);
+		let prev_button = Button::new().unwrap();
+		prev_button.add(&prev_icon);
+		paging.pack_start(&prev_button, false, false, 0);
 		
 		let next_icon = Image::new_from_icon_name("go-next", IconSize::SmallToolbar as i32).unwrap();
-		let next_button = ToolButton::new::<Image>(Some(&next_icon), None).unwrap();
-		//next_button.set_is_important(true);
-		toolbar.add(&next_button);
+		let next_button = Button::new().unwrap();
+		next_button.add(&next_icon);
+		paging.pack_start(&next_button, false, false, 0);
 		
-		toolbar
+		paging
+	}
+	//paging
+	fn create_paging_buttons_for_list()->gtk::Box{
+		let paging = gtk::Box::new(Horizontal, 0).unwrap();
+		let prev_icon = Image::new_from_icon_name("go-previous", IconSize::SmallToolbar as i32).unwrap();
+		let prev_button = Button::new().unwrap();
+		prev_button.add(&prev_icon);
+		paging.pack_start(&prev_button, false, false, 0);
+		
+		let next_icon = Image::new_from_icon_name("go-next", IconSize::SmallToolbar as i32).unwrap();
+		let next_button = Button::new().unwrap();
+		next_button.add(&next_icon);
+		paging.pack_start(&next_button, false, false, 0);
+		
+		paging
 	}
 }

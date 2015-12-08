@@ -53,34 +53,53 @@ impl Connection{
 	}
 
 	pub fn build_widget(&self)->Dialog{
-		let title = "New connection";
-		let flags = DialogFlags::all();
-		let dialog = Dialog::with_buttons(title, None, flags,
-                     [("Ok", ResponseType::Accept), ("Cancel", ResponseType::Cancel)]);
-
+		let title = "Connect to Server";
+		let dialog = Dialog::new();
+		dialog.set_title(title);
 		let area = dialog.get_content_area();
 		let stack = Stack::new().unwrap();
 		let stack_switcher = StackSwitcher::new().unwrap();
 		let simple = Self::connection_scheme_widget();
 		let advance = Self::connection_url_widget();
-		let vbox = gtk::Box::new(Vertical,10).unwrap();
+		let vbox = gtk::Box::new(Vertical,0).unwrap();
 		stack.add_titled(&simple,"simple", "Simple");
 		stack.add_titled(&advance, "advance", "Advance");
-		vbox.pack_start(&stack_switcher, true, true, 10);
-		vbox.pack_start(&stack, true, true, 10);
+		let stack_box = ButtonBox::new(Horizontal).unwrap();
+		stack_box.add(&stack_switcher);
+		let form_box = ButtonBox::new(Horizontal).unwrap();
+		form_box.add(&stack);
+		vbox.pack_start(&stack_box, true, true, 10);
+		vbox.pack_start(&form_box, true, true, 10);
 		stack_switcher.set_stack(stack);
-		area.pack_start(&vbox, true, true, 10);
-
+		let action_buttons = Self::create_connect_cancel_buttons();
+		vbox.pack_start(&action_buttons, true, true, 20);
+		area.pack_start(&vbox, true, true, 0);
+		dialog.set_default_size(300, 400);
 		dialog.show_all();
 		dialog
 	}
 
-	fn connection_url_widget()->ButtonBox{
-		let bbox = ButtonBox::new(Horizontal).unwrap();
+	fn create_connect_cancel_buttons()->gtk::Box{
+		let toolbox = Toolbar::new().unwrap();
+		let ok_icon = Image::new_from_icon_name("dialog-apply", IconSize::LargeToolbar as i32).unwrap();
+		let ok_btn = ToolButton::new::<Image>(Some(&ok_icon), Some("Connect")).unwrap();
+		ok_btn.set_is_important(true);
+		let cancel_icon = Image::new_from_icon_name("window-close", IconSize::LargeToolbar as i32).unwrap();
+		let cancel_btn = ToolButton::new::<Image>(Some(&cancel_icon),Some("Cancel")).unwrap();
+		cancel_btn.set_is_important(true);
+		toolbox.add(&cancel_btn);
+		toolbox.add(&ok_btn);
+		let hbox = gtk::Box::new(Horizontal, 0).unwrap();
+		hbox.pack_end(&toolbox, false, false, 0);
+		hbox
+	}
+
+	fn connection_url_widget()->gtk::Box{
+		let bbox = gtk::Box::new(Horizontal,10).unwrap();
 		let label = Label::new("Connection Url: ").unwrap();
 		let entry = Entry::new().unwrap();
-		bbox.pack_start(&label, true, true, 10);
-		bbox.pack_start(&entry, true, true, 10);
+		bbox.pack_start(&label, true, true, 0);
+		bbox.pack_start(&entry, true, true, 0);
 		bbox
 	}
 
