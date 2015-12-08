@@ -1,3 +1,7 @@
-## TODO
+## Prototype
 
-- window list selection change unable to connect click to open windows
+This is a prototype on intial designs of the system
+
+### Some early prototype
+
+![Client side](https://raw.githubusercontent.com/transparent-ph/prototype/master/screenshot/client_side.png)
