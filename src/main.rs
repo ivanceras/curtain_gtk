@@ -40,8 +40,8 @@ fn main(){
 		return;
 	}
 
-	let window = CurtainWindow::new();
-	window.build_widget();
+	let cwindow = CurtainWindow::new();
+	cwindow.build_widget();
 	gtk::main();
 
 }

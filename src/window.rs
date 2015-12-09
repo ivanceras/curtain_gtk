@@ -34,6 +34,7 @@ pub struct CurtainWindow{
 	list_widget: ScrolledWindow,
 	toolbar: Toolbar,
 	open_tabs: NoteBook,
+	pub window: Window,
 }
 
 impl CurtainWindow{
@@ -42,36 +43,38 @@ impl CurtainWindow{
 		let (window_list, list_widget) = Self::create_window_list();	
 		let toolbar = Self::create_toolbar();
 		let open_tabs = Self::create_tabs();
+		let window = Window::new(Toplevel).unwrap();
+		
 		CurtainWindow{
 			window_list: window_list,
 			list_widget: list_widget,
 			toolbar: toolbar,
 			open_tabs: open_tabs,
+			window: window
 		}
 	}
 
-	pub fn build_widget(&self)->Window{
-		let window = Window::new(Toplevel).unwrap();
-		window.set_title("Curtain - GTK");
-		window.set_default_size(1024,768);
+	pub fn build_widget<'a>(&'a self){
+		self.window.set_title("Curtain - GTK");
+		self.window.set_default_size(1024,768);
 		let vbox = gtk::Box::new(Vertical, 0).unwrap();
 		vbox.add(&self.toolbar);
-		window.add(&vbox);
+		self.window.add(&vbox);
 		let hbox = gtk::Box::new(Horizontal,0).unwrap();
 		vbox.add(&hbox);
 		hbox.add(&self.list_widget);
 		hbox.add(&self.open_tabs);
-		window.set_window_position(Center);
+		self.window.set_window_position(Center);
 		for i in 0..3{
 			self.add_curtain_tab(&format!("Window {}",i));
 		}
 		self.init_window_list_selection();
-		window.show_all();
-		window.connect_delete_event(|_,_| {
+		let this = self.clone();
+		self.window.show_all();
+		self.window.connect_delete_event(|_,_| {
 			gtk::main_quit();
 			Inhibit(false)
 		});
-		window
 	}
 
 	// this is a list of the items to be viewed
@@ -99,14 +102,15 @@ impl CurtainWindow{
 	}
 
 	fn init_window_list_selection(&self){
-		let selection = self.window_list.get_selection().unwrap();
-		let this = self.clone();//FIXME cloning the window on this closure doesn't work
-		selection.connect_changed(move|tree_selection|{
-			let (model, iter) = tree_selection.get_selected().unwrap();
+		let this = self.clone();
+		self.window_list.get_selection().as_ref().unwrap().connect_changed(move| _ |{
+			let (model, iter) = this.window_list.get_selection().as_ref().unwrap().get_selected().unwrap();
 			if let Some(path) = model.get_path(&iter) {
 				let value = unsafe {model.get_value(&iter,0).get_string().unwrap()};
 				println!("open window {} {}", path.to_string().unwrap(), value);
 				this.add_curtain_tab(&value);
+				//TODO: show the newly open tab
+				this.window.show_all();//Notes: Important to call show all in order to redraw the added tabs
 			}	
 		});
 
@@ -135,7 +139,7 @@ impl CurtainWindow{
 		notebook
 	}
 
-	fn add_curtain_tab(&self, title:&str){
+	pub fn add_curtain_tab(&self, title:&str){
 		println!("Adding {}", title);
 		let tab = gtk::Box::new(Horizontal, 0).unwrap();
 		let sheet = Label::new(title).unwrap();
@@ -149,9 +153,15 @@ impl CurtainWindow{
 		tab.add(&close_btn);
 		let curtain_tab = CurtainTab::new();
 		let curtain_widget = curtain_tab.build_widget();
+		curtain_widget.show_all();// needed in order for setting current page works
 		self.open_tabs.append_page(&curtain_widget, Some(&tab));
 		self.open_tabs.set_tab_reorderable(&curtain_widget, true);
         self.open_tabs.set_tab_detachable(&curtain_widget, true);
+		self.open_tabs.popup_enable();
+		let page_num = self.open_tabs.page_num(&curtain_widget).unwrap();
+		println!("page num: {}", page_num);
+		//curtain_widget.set_visible(true);//NEEDED or else set_current_page wont work
+		self.open_tabs.set_current_page(page_num as i32);
 		let notebook_clone = self.open_tabs.clone();
 		close_btn.connect_clicked(move|_|{
 					let index = notebook_clone.page_num(&curtain_widget).unwrap();
